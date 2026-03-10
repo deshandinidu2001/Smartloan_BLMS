@@ -24,6 +24,39 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Check for duplicate NIC or email before registration
+router.get('/check-duplicate', async (req, res) => {
+  try {
+    const prisma = req.prisma;
+    const { nic, email } = req.query;
+
+    if (!nic && !email) {
+      return res.status(400).json({ message: 'Provide nic or email query param' });
+    }
+
+    const orConditions = [];
+    if (nic) orConditions.push({ nic });
+    if (email) orConditions.push({ email });
+
+    const existing = await prisma.customer.findFirst({
+      where: { OR: orConditions },
+      select: { id: true, nic: true, email: true }
+    });
+
+    if (existing) {
+      return res.json({
+        exists: true,
+        field: existing.nic === nic ? 'nic' : 'email'
+      });
+    }
+
+    res.json({ exists: false });
+  } catch (error) {
+    console.error('Check duplicate error:', error);
+    res.status(500).json({ message: 'Failed to check duplicate' });
+  }
+});
+
 // Get single customer
 router.get('/:id', async (req, res) => {
   try {

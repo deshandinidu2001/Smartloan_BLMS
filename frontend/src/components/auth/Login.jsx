@@ -61,16 +61,30 @@ export default function Login({ setIsAuthenticated, setUserRole }) {
     // Real API login
     try {
       const response = await authAPI.login(credentials);
+      const actualRole = response.data.user.role;
+
+      // Prevent admin accounts from logging in via the officer login page
+      if (selectedRole === 'officer' && actualRole === 'admin') {
+        setError('This account is an Administrator account. Please go back and select the Administrator login.');
+        return;
+      }
+
+      // Prevent officer accounts from logging in via the admin login page
+      if (selectedRole === 'admin' && actualRole === 'officer') {
+        setError('This account is a Loan Officer account. Please go back and select the Loan Officer login.');
+        return;
+      }
+
       setAuthToken(response.data.token);
       setUser(response.data.user);
       localStorage.setItem('authToken', response.data.token);
-      localStorage.setItem('userRole', response.data.user.role);
+      localStorage.setItem('userRole', actualRole);
       localStorage.setItem('userName', response.data.user.fullName);
       
       if (setIsAuthenticated) setIsAuthenticated(true);
-      if (setUserRole) setUserRole(response.data.user.role);
+      if (setUserRole) setUserRole(actualRole);
       
-      navigate(response.data.user.role === 'admin' ? '/admin' : '/officer');
+      navigate(actualRole === 'admin' ? '/admin' : '/officer');
     } catch (err) {
       setError(err.response?.data?.message || 'Invalid email or password. Please try again.');
     } finally {

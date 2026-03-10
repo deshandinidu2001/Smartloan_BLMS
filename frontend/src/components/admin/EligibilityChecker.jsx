@@ -16,7 +16,6 @@ export default function EligibilityChecker() {
     duration: '',
     creditScore: '',
     existingDebts: '',
-    collateralValue: '',
     employmentType: 'Private Sector',
     interestRate: ''
   });
@@ -50,24 +49,21 @@ export default function EligibilityChecker() {
     return emi;
   }, []);
 
-  const calculateMaxLoanAmount = useCallback((monthlyIncome, existingDebts, collateralValue, creditScore, duration, interestRate) => {
+  const calculateMaxLoanAmount = useCallback((monthlyIncome, existingDebts, creditScore, duration, interestRate) => {
     const monthlyRate = interestRate / 12 / 100;
-    const targetAfterEMI = 40000;
-    const maxEMI = monthlyIncome - existingDebts - targetAfterEMI;
+    // Use 40% of income as the max affordable EMI
+    const maxEMI = monthlyIncome * 0.4 - existingDebts;
 
     if (maxEMI <= 0) return 0;
 
     const factor = (Math.pow(1 + monthlyRate, duration) - 1) / (monthlyRate * Math.pow(1 + monthlyRate, duration));
-    let maxFromIncome = maxEMI * factor;
+    let maxLoan = maxEMI * factor;
 
-    if (creditScore < 500) maxFromIncome *= 0.5;
-    else if (creditScore < 600) maxFromIncome *= 0.7;
-    else if (creditScore < 700) maxFromIncome *= 0.85;
-    else if (creditScore >= 800) maxFromIncome *= 1.1;
+    if (creditScore < 500) maxLoan *= 0.5;
+    else if (creditScore < 600) maxLoan *= 0.7;
+    else if (creditScore < 700) maxLoan *= 0.85;
+    else if (creditScore >= 800) maxLoan *= 1.1;
 
-    const maxFromCollateral = collateralValue * 0.8;
-
-    let maxLoan = Math.max(maxFromIncome, maxFromCollateral);
     maxLoan = Math.min(maxLoan, monthlyIncome * 30);
 
     return Math.max(0, Math.floor(maxLoan / 10000) * 10000);
@@ -75,11 +71,10 @@ export default function EligibilityChecker() {
 
   const generateRecommendations = useCallback((data, emi, aiResponse, maxEligible, afterEMI) => {
     const recommendations = [];
-    const { monthlyIncome, loanAmount, collateralValue, existingDebts, creditScore, employmentType } = data;
+    const { monthlyIncome, loanAmount, existingDebts, creditScore, employmentType } = data;
 
     const totalDebt = existingDebts + emi;
     const dtiRatio = totalDebt / monthlyIncome;
-    const collateralRatio = loanAmount > 0 ? collateralValue / loanAmount : 0;
     const isEligible = aiResponse.eligible;
 
     if (totalDebt >= monthlyIncome) {
@@ -146,15 +141,6 @@ export default function EligibilityChecker() {
       });
     }
 
-    if (collateralRatio >= 1.0) {
-      recommendations.push({
-        type: 'success',
-        title: 'Fully Secured Loan',
-        message: `Your collateral covers ${(collateralRatio * 100).toFixed(0)}% of the loan amount.`,
-        action: 'This significantly reduces risk. You may qualify for lower interest rates.'
-      });
-    }
-
     if (employmentType === 'Self-Employed') {
       recommendations.push({
         type: 'info',
@@ -212,7 +198,6 @@ export default function EligibilityChecker() {
       duration: '',
       creditScore: '',
       existingDebts: '',
-      collateralValue: '',
       employmentType: 'Private Sector',
       interestRate: ''
     });
@@ -227,7 +212,6 @@ export default function EligibilityChecker() {
         credit_score: data.creditScore,
         existing_debts: data.existingDebts,
         duration: data.duration,
-        collateral_value: data.collateralValue,
         employment_type: data.employmentType,
         interest_rate: data.interestRate
       });
@@ -258,7 +242,6 @@ export default function EligibilityChecker() {
     const maxEligible = calculateMaxLoanAmount(
       data.monthlyIncome,
       data.existingDebts,
-      data.collateralValue,
       data.creditScore,
       data.duration,
       data.interestRate
@@ -267,7 +250,6 @@ export default function EligibilityChecker() {
     const recommendations = generateRecommendations(data, emi, aiResponse, maxEligible, afterEMI);
 
     const dtiRatio = data.monthlyIncome > 0 ? (totalDebt / data.monthlyIncome) * 100 : 0;
-    const collateralRatio = data.loanAmount > 0 ? (data.collateralValue / data.loanAmount) * 100 : 0;
     const loanToIncome = data.monthlyIncome > 0 ? data.loanAmount / data.monthlyIncome : 0;
 
     const totalRepayment = emi * data.duration;
@@ -287,7 +269,6 @@ export default function EligibilityChecker() {
       totalRepayment: Math.round(totalRepayment),
       totalInterest: Math.round(totalInterest),
       dtiRatio: dtiRatio.toFixed(1),
-      collateralRatio: collateralRatio.toFixed(1),
       loanToIncome: loanToIncome.toFixed(1),
       afterEMI: Math.round(afterEMI),
       recommendations,
@@ -308,7 +289,6 @@ export default function EligibilityChecker() {
         duration: parseInt(formData.duration) || 36,
         creditScore: parseInt(formData.creditScore) || 0,
         existingDebts: parseFloat(formData.existingDebts) || 0,
-        collateralValue: parseFloat(formData.collateralValue) || 0,
         employmentType: formData.employmentType,
         interestRate: parseFloat(formData.interestRate) || 15
       };
@@ -536,7 +516,7 @@ export default function EligibilityChecker() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Duration (Months)</label>
+                <label style={labelStyle}>Duration (Months) *</label>
                 <select
                   name="duration"
                   value={formData.duration}
@@ -554,7 +534,7 @@ export default function EligibilityChecker() {
             {/* Row 3: Interest Rate & Existing Debts */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div>
-                <label style={labelStyle}>Interest Rate (% p.a.)</label>
+                <label style={labelStyle}>Interest Rate (% p.a.) *</label>
                 <input
                   type="number"
                   name="interestRate"
@@ -568,7 +548,7 @@ export default function EligibilityChecker() {
                 />
               </div>
               <div>
-                <label style={labelStyle}>Existing Monthly Debts (LKR)</label>
+                <label style={labelStyle}>Existing Monthly Debts (LKR) *</label>
                 <input
                   type="number"
                   name="existingDebts"
@@ -583,20 +563,20 @@ export default function EligibilityChecker() {
             {/* Check Button */}
             <button
               onClick={checkEligibility}
-              disabled={loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore}
+              disabled={loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore || !formData.duration || !formData.interestRate}
               style={{
                 width: '100%',
                 padding: '14px',
-                background: loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore
+                background: loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore || !formData.duration || !formData.interestRate
                   ? (isDark ? '#334155' : '#e2e8f0')
                   : '#4361ee',
                 border: 'none',
                 borderRadius: '8px',
-                color: loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore
+                color: loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore || !formData.duration || !formData.interestRate
                   ? colors.textMuted : 'white',
                 fontSize: '14px',
                 fontWeight: '600',
-                cursor: loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore ? 'not-allowed' : 'pointer',
+                cursor: loading || !formData.monthlyIncome || !formData.loanAmount || !formData.creditScore || !formData.duration || !formData.interestRate ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -684,11 +664,10 @@ export default function EligibilityChecker() {
             </div>
 
             {/* Key Metrics */}
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
               {[
                 { label: 'Monthly EMI', value: `LKR ${result.emi.toLocaleString()}` },
                 { label: 'After EMI Balance', value: `LKR ${result.afterEMI.toLocaleString()}`, color: result.afterEMI < 10000 ? '#ef4444' : result.afterEMI < 25000 ? '#f59e0b' : undefined },
-                { label: 'Max Eligible (60%)', value: `LKR ${result.maxEligibleAmount.toLocaleString()}` },
                 { label: 'Risk Level', value: result.riskLevel, color: result.riskLevel === 'Low' ? '#10b981' : result.riskLevel === 'Medium' ? '#f59e0b' : '#ef4444' }
               ].map((metric, idx) => (
                 <div key={idx} style={{
@@ -710,10 +689,9 @@ export default function EligibilityChecker() {
                 Financial Analysis
               </h3>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px' }}>
                 {[
                   { label: 'Debt-to-Income', value: `${result.dtiRatio}%`, max: 100, current: parseFloat(result.dtiRatio), warn: 60, danger: 100 },
-                  { label: 'Collateral Coverage', value: `${result.collateralRatio}%`, max: 100, current: parseFloat(result.collateralRatio), good: true },
                   { label: 'Loan-to-Income', value: `${result.loanToIncome}x`, max: 30, current: parseFloat(result.loanToIncome), warn: 10, danger: 20 },
                   { label: 'After EMI Health', value: result.afterEMI >= 40000 ? 'Safe' : result.afterEMI >= 10000 ? 'Risky' : 'Low', max: 100, current: Math.min(100, Math.max(0, result.afterEMI / 500)), good: true }
                 ].map((item, idx) => {

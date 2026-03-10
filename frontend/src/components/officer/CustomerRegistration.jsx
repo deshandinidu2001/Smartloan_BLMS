@@ -8,6 +8,7 @@ export default function CustomerRegistration() {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [nicChecking, setNicChecking] = useState(false);
   const [error, setError] = useState('');
 
   const SL_PROVINCES = [
@@ -164,6 +165,20 @@ export default function CustomerRegistration() {
         }
         setErrors(prev => ({ ...prev, nationalId: nicError }));
         setFormData(prev => ({ ...prev, nationalId: value }));
+
+        // Check for duplicate NIC once the format is valid and complete
+        const isComplete = /^\d{9}[VXvx]$/.test(value) || /^\d{12}$/.test(value);
+        if (isComplete && !nicError) {
+          setNicChecking(true);
+          api.get('/customers/check-duplicate', { params: { nic: value } })
+            .then(res => {
+              if (res.data.exists) {
+                setErrors(prev => ({ ...prev, nationalId: 'A customer with this NIC is already registered' }));
+              }
+            })
+            .catch(() => {}) // silently ignore network errors during real-time check
+            .finally(() => setNicChecking(false));
+        }
         return;
       } else {
         setFormData(prev => ({ ...prev, [name]: value }));
@@ -183,20 +198,29 @@ export default function CustomerRegistration() {
       if (!formData.email) newErrors.email = 'Email is required';
       else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Invalid email format';
       if (!formData.phone) newErrors.phone = 'Phone number is required';
+      else if (!/^(\+94|0)(7[0-9]{8}|[1-9][0-9]{7,8})$/.test(formData.phone.replace(/\s/g, '')))
+        newErrors.phone = 'Enter a valid Sri Lankan mobile number (e.g. 0771234567 or +94771234567)';
       if (!formData.dateOfBirth) newErrors.dateOfBirth = 'Date of birth is required';
+      if (!formData.gender) newErrors.gender = 'Gender is required';
       if (!formData.nationalId) newErrors.nationalId = 'National ID is required';
       else if (!/^\d{9}[VXvx]$/.test(formData.nationalId) && !/^\d{12}$/.test(formData.nationalId))
         newErrors.nationalId = 'Invalid NIC. Use old format (9 digits + V/X) or new format (12 digits)';
+      if (!formData.address) newErrors.address = 'Street address is required';
+      if (!formData.city) newErrors.city = 'City is required';
     } else if (stepNum === 2) {
       if (!formData.employmentStatus) newErrors.employmentStatus = 'Employment status is required';
-      if (formData.employmentStatus === 'employed') {
-        if (!formData.employer) newErrors.employer = 'Employer name is required';
+      if (formData.employmentStatus === 'employed' || formData.employmentStatus === 'self-employed' || formData.employmentStatus === 'business-owner') {
+        if (!formData.employer) newErrors.employer = 'Employer / Business name is required';
         if (!formData.monthlyIncome) newErrors.monthlyIncome = 'Monthly income is required';
+        else if (isNaN(Number(formData.monthlyIncome)) || Number(formData.monthlyIncome) <= 0)
+          newErrors.monthlyIncome = 'Enter a valid monthly income';
       }
     }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(prev => ({ ...prev, ...newErrors }));
+    // Also factor in any pre-existing errors (e.g. duplicate NIC set by real-time check)
+    const mergedErrors = { ...errors, ...newErrors };
+    return Object.keys(newErrors).length === 0 && !mergedErrors.nationalId;
   };
 
   const nextStep = () => {
@@ -459,7 +483,7 @@ export default function CustomerRegistration() {
               </div>
               <div>
                 <label style={labelStyle}>Phone Number *</label>
-                <input type="tel" name="phone" value={formData.phone} onChange={handleChange} style={inputStyle} placeholder="+94 77 123 4567" />
+                <input type="tel" name="phone" value={formData.phone} onChange={handleChange} style={{ ...inputStyle, ...(errors.phone && { borderColor: '#ef4444' }) }} placeholder="+94 77 123 4567" />
                 {errors.phone && <p style={errorStyle}>{errors.phone}</p>}
               </div>
               <div>
@@ -468,18 +492,20 @@ export default function CustomerRegistration() {
                 {errors.dateOfBirth && <p style={errorStyle}>{errors.dateOfBirth}</p>}
               </div>
               <div>
-                <label style={labelStyle}>Gender</label>
+                <label style={labelStyle}>Gender *</label>
                 <CustomSelect
                   name="gender"
                   value={formData.gender}
                   onChange={handleChange}
                   placeholder="Select gender..."
+                  hasError={!!errors.gender}
                   options={[
                     { value: 'male', label: 'Male' },
                     { value: 'female', label: 'Female' },
                     { value: 'other', label: 'Other' },
                   ]}
                 />
+                {errors.gender && <p style={errorStyle}>{errors.gender}</p>}
               </div>
               <div>
                 <label style={labelStyle}>Age</label>
@@ -498,18 +524,22 @@ export default function CustomerRegistration() {
                 />
                 {errors.nationalId
                   ? <p style={errorStyle}>{errors.nationalId}</p>
-                  : <p style={{ ...errorStyle, color: muted, marginTop: 3 }}>
-                      Old: 9 digits + V/X &nbsp;&bull;&nbsp; New: 12 digits &nbsp;({formData.nationalId.length}/12)
-                    </p>
+                  : nicChecking
+                    ? <p style={{ ...errorStyle, color: '#f59e0b', marginTop: 3 }}>Checking NIC...</p>
+                    : <p style={{ ...errorStyle, color: muted, marginTop: 3 }}>
+                        Old: 9 digits + V/X &nbsp;&bull;&nbsp; New: 12 digits &nbsp;({formData.nationalId.length}/12)
+                      </p>
                 }
               </div>
               <div style={{ gridColumn: 'span 2' }}>
-                <label style={labelStyle}>Street Address</label>
-                <input type="text" name="address" value={formData.address} onChange={handleChange} style={inputStyle} placeholder="No. 45, Galle Road, Colombo 03" />
+                <label style={labelStyle}>Street Address *</label>
+                <input type="text" name="address" value={formData.address} onChange={handleChange} style={{ ...inputStyle, ...(errors.address && { borderColor: '#ef4444' }) }} placeholder="No. 45, Galle Road, Colombo 03" />
+                {errors.address && <p style={errorStyle}>{errors.address}</p>}
               </div>
               <div>
-                <label style={labelStyle}>City</label>
-                <input type="text" name="city" value={formData.city} onChange={handleChange} style={inputStyle} placeholder="Colombo" />
+                <label style={labelStyle}>City *</label>
+                <input type="text" name="city" value={formData.city} onChange={handleChange} style={{ ...inputStyle, ...(errors.city && { borderColor: '#ef4444' }) }} placeholder="Colombo" />
+                {errors.city && <p style={errorStyle}>{errors.city}</p>}
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div>
@@ -557,8 +587,8 @@ export default function CustomerRegistration() {
                 {errors.employmentStatus && <p style={errorStyle}>{errors.employmentStatus}</p>}
               </div>
               <div>
-                <label style={labelStyle}>Employer / Business Name {formData.employmentStatus === 'employed' && '*'}</label>
-                <input type="text" name="employer" value={formData.employer} onChange={handleChange} style={inputStyle} placeholder="Ceylon Petroleum Corporation" />
+                <label style={labelStyle}>Employer / Business Name {(formData.employmentStatus === 'employed' || formData.employmentStatus === 'self-employed' || formData.employmentStatus === 'business-owner') && '*'}</label>
+                <input type="text" name="employer" value={formData.employer} onChange={handleChange} style={{ ...inputStyle, ...(errors.employer && { borderColor: '#ef4444' }) }} placeholder="Ceylon Petroleum Corporation" />
                 {errors.employer && <p style={errorStyle}>{errors.employer}</p>}
               </div>
               <div>
@@ -566,8 +596,8 @@ export default function CustomerRegistration() {
                 <input type="text" name="jobTitle" value={formData.jobTitle} onChange={handleChange} style={inputStyle} placeholder="Senior Software Engineer" />
               </div>
               <div>
-                <label style={labelStyle}>Monthly Income (LKR) {formData.employmentStatus === 'employed' && '*'}</label>
-                <input type="number" name="monthlyIncome" value={formData.monthlyIncome} onChange={handleChange} style={inputStyle} placeholder="85000" />
+                <label style={labelStyle}>Monthly Income (LKR) {(formData.employmentStatus === 'employed' || formData.employmentStatus === 'self-employed' || formData.employmentStatus === 'business-owner') && '*'}</label>
+                <input type="number" name="monthlyIncome" value={formData.monthlyIncome} onChange={handleChange} style={{ ...inputStyle, ...(errors.monthlyIncome && { borderColor: '#ef4444' }) }} placeholder="85000" />
                 {errors.monthlyIncome && <p style={errorStyle}>{errors.monthlyIncome}</p>}
               </div>
               <div>
@@ -684,22 +714,23 @@ export default function CustomerRegistration() {
           {step < 3 ? (
             <button
               onClick={nextStep}
+              disabled={nicChecking}
               style={{
                 padding: '9px 20px',
-                background: '#4361ee',
+                background: nicChecking ? '#6b7280' : '#4361ee',
                 border: 'none',
                 borderRadius: 8,
                 color: '#fff',
                 fontWeight: 600,
                 fontSize: 13,
-                cursor: 'pointer',
+                cursor: nicChecking ? 'not-allowed' : 'pointer',
                 display: 'flex',
                 alignItems: 'center',
                 gap: 6
               }}
             >
-              Next Step
-              <ChevronRight size={15} />
+              {nicChecking ? 'Checking NIC...' : 'Next Step'}
+              {!nicChecking && <ChevronRight size={15} />}
             </button>
           ) : (
             <button

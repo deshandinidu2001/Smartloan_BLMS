@@ -238,38 +238,6 @@ export default function Reports() {
         styles: { fontSize: 8, cellPadding: 3 },
       });
 
-      /* individual loans table */
-      const afterMonthly = (doc.lastAutoTable?.finalY ?? afterRisk + 40) + 10;
-      doc.setTextColor(30, 30, 30); doc.setFontSize(12); doc.setFont('helvetica', 'bold');
-      doc.text(`Loan List  (${label})`, 18, afterMonthly);
-      doc.line(18, afterMonthly + 3, pw - 18, afterMonthly + 3);
-
-      autoTable(doc, {
-        startY: afterMonthly + 6,
-        head: [['#', 'Customer', 'Amount', 'Loan Type', 'Status', 'Date']],
-        body: loans.length
-          ? loans.map((l, i) => {
-              const name = l.customer
-                ? `${l.customer.firstName || ''} ${l.customer.lastName || ''}`.trim()
-                : (l.customerName || 'N/A');
-              const type = l.loanType?.name
-                        || (typeof l.loanType === 'string' ? l.loanType : null)
-                        || l.purpose || 'N/A';
-              return [
-                (i + 1).toString(), name,
-                fmt(l.amount || l.loanAmount || 0), type,
-                l.status ? l.status.charAt(0).toUpperCase() + l.status.slice(1) : 'N/A',
-                new Date(l.createdAt || l.submittedAt).toLocaleDateString(),
-              ];
-            })
-          : [['—', 'No data in this period', '', '', '', '']],
-        theme: 'striped',
-        headStyles: { fillColor: [67, 97, 238], textColor: 255, fontStyle: 'bold', fontSize: 9 },
-        alternateRowStyles: { fillColor: [248, 249, 252] },
-        styles: { fontSize: 8, cellPadding: 3 },
-        columnStyles: { 0:{cellWidth:10}, 1:{cellWidth:40}, 2:{cellWidth:28}, 3:{cellWidth:30}, 4:{cellWidth:22}, 5:{cellWidth:24} },
-      });
-
       /* page footer */
       const pages = doc.internal.getNumberOfPages();
       for (let i = 1; i <= pages; i++) {

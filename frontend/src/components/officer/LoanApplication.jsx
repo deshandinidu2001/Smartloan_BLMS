@@ -282,8 +282,28 @@ export default function LoanApplication() {
       setError('Please select a customer');
       return;
     }
-    if (!formData.loanTypeId || !formData.amount || !formData.term) {
-      setError('Please fill in all required fields');
+
+    const validationErrors = [];
+    if (!formData.loanTypeId) validationErrors.push('Loan Type');
+    if (!formData.amount || isNaN(Number(formData.amount)) || Number(formData.amount) <= 0)
+      validationErrors.push('Loan Amount');
+    if (!formData.term) validationErrors.push('Loan Term');
+    if (!formData.creditScore || isNaN(Number(formData.creditScore)) || Number(formData.creditScore) < 300 || Number(formData.creditScore) > 850)
+      validationErrors.push('Credit Score (must be between 300–850)');
+
+    // Validate amount against loan type limits
+    if (formData.loanTypeId && formData.amount) {
+      const selectedLoanTypeValid = loanTypes.find(lt => lt.id === parseInt(formData.loanTypeId));
+      if (selectedLoanTypeValid) {
+        const amt = Number(formData.amount);
+        if (amt < selectedLoanTypeValid.minAmount || amt > selectedLoanTypeValid.maxAmount) {
+          validationErrors.push(`Loan Amount must be between Rs. ${Number(selectedLoanTypeValid.minAmount).toLocaleString()} and Rs. ${Number(selectedLoanTypeValid.maxAmount).toLocaleString()}`);
+        }
+      }
+    }
+
+    if (validationErrors.length > 0) {
+      setError('Please fill in all required fields: ' + validationErrors.join(', '));
       return;
     }
 
