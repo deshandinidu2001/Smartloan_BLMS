@@ -57,18 +57,17 @@ const getSetting = async (key) => {
 // Log notification
 const logNotification = async (data) => {
   try {
+    // Map incoming log fields to the Prisma Notification model
+    const entityType = data.entityType || (data.loanId ? 'loan' : (data.customerId ? 'customer' : null));
+    const entityId = data.loanId || data.customerId || null;
     await prisma.notification.create({
       data: {
-        type: data.type,
-        title: data.title || data.subject || `${data.type} notification`,
-        recipient: data.recipient,
-        subject: data.subject || null,
-        message: data.message,
-        status: data.status,
-        errorMessage: data.errorMessage || null,
-        relatedLoanId: data.loanId || null,
-        relatedCustomerId: data.customerId || null,
-        sentAt: data.status === 'sent' ? new Date() : null
+        type: data.type || 'system',
+        title: data.title || data.subject || `${data.type || 'notification'} notification`,
+        message: data.message || '',
+        priority: data.priority || 'medium',
+        entityType: entityType || null,
+        entityId: entityId ? parseInt(entityId) : null
       }
     });
   } catch (error) {
@@ -371,11 +370,18 @@ const sendBulkOverdueNotifications = async () => {
 // Get notification history
 const getNotificationHistory = async (filters = {}) => {
   const where = {};
-  
+
   if (filters.type) where.type = filters.type;
-  if (filters.status) where.status = filters.status;
-  if (filters.customerId) where.relatedCustomerId = parseInt(filters.customerId);
-  if (filters.loanId) where.relatedLoanId = parseInt(filters.loanId);
+
+  // Map legacy filter names to current model fields
+  if (filters.customerId) {
+    where.entityType = 'customer';
+    where.entityId = parseInt(filters.customerId);
+  }
+  if (filters.loanId) {
+    where.entityType = 'loan';
+    where.entityId = parseInt(filters.loanId);
+  }
 
   return prisma.notification.findMany({
     where,

@@ -63,7 +63,7 @@ export const loanAPI = {
 
 // AI API
 export const aiAPI = {
-  checkEligibility: (data) => api.post('/ai/predict', data),
+  checkEligibility: (data) => api.post('/ai/check-eligibility', data),
 };
 
 export default api;

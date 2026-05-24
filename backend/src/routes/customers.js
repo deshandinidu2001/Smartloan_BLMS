@@ -58,6 +58,30 @@ router.get('/check-duplicate', async (req, res) => {
 });
 
 // Get single customer
+// Search customers
+router.get('/search/:query', async (req, res) => {
+  try {
+    const prisma = req.prisma;
+    const query = req.params.query.toLowerCase();
+    
+    const customers = await prisma.customer.findMany({
+      where: {
+        OR: [
+          { fullName: { contains: query, mode: 'insensitive' } },
+          { nic: { contains: query, mode: 'insensitive' } },
+          { email: { contains: query, mode: 'insensitive' } }
+        ]
+      }
+    });
+    
+    res.json(customers);
+  } catch (error) {
+    console.error('Search customers error:', error);
+    res.status(500).json({ message: 'Failed to search customers' });
+  }
+});
+
+// Get single customer
 router.get('/:id', async (req, res) => {
   try {
     const prisma = req.prisma;
@@ -215,27 +239,6 @@ router.delete('/:id', async (req, res) => {
   }
 });
 
-// Search customers
-router.get('/search/:query', async (req, res) => {
-  try {
-    const prisma = req.prisma;
-    const query = req.params.query.toLowerCase();
-    
-    const customers = await prisma.customer.findMany({
-      where: {
-        OR: [
-          { fullName: { contains: query, mode: 'insensitive' } },
-          { nic: { contains: query, mode: 'insensitive' } },
-          { email: { contains: query, mode: 'insensitive' } }
-        ]
-      }
-    });
-    
-    res.json(customers);
-  } catch (error) {
-    console.error('Search customers error:', error);
-    res.status(500).json({ message: 'Failed to search customers' });
-  }
-});
+// (search route moved above to avoid being shadowed by '/:id')
 
 module.exports = router;
